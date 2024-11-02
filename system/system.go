@@ -51,21 +51,24 @@ type DockerRunc struct {
 }
 
 type System struct {
-	Architecture       string   `json:"architecture"`
-	CPUThreads         int      `json:"cpu_threads"`
-	CPUUsage           *float64 `json:"cpu_usage"`
-	MemoryBytes        int64    `json:"memory_bytes"`
-	MemoryBytesUsage   *uint64  `json:"memory_bytes_usage"`
-	MemoryPercentUsage *float64 `json:"memory_percent_usage"`
-	DiskBytes          *uint64  `json:"disk_bytes"`
-	DiskBytesUsage     *uint64  `json:"disk_bytes_usage"`
-	DiskPercentUsage   *float64 `json:"disk_percent_usage"`
-	KernelVersion      string   `json:"kernel_version"`
-	OS                 string   `json:"os"`
-	OSType             string   `json:"os_type"`
+	Architecture            string   `json:"architecture"`
+	CPUThreads              int      `json:"cpu_threads"`
+	CPUUsage                *float64 `json:"cpu_usage"`
+	MemoryBytes             int64    `json:"memory_bytes"`
+	MemoryBytesUsage        *uint64  `json:"memory_bytes_usage"`
+	MemoryPercentUsage      *float64 `json:"memory_percent_usage"`
+	VolumesDiskBytes        *uint64  `json:"volumes_disk_bytes"`
+	VolumesDiskBytesUsage   *uint64  `json:"volumes_disk_bytes_usage"`
+	VolumesDiskPercentUsage *float64 `json:"volumes_disk_percent_usage"`
+	BackupDiskBytes         *uint64  `json:"backup_disk_bytes"`
+	BackupDiskBytesUsage    *uint64  `json:"backup_disk_bytes_usage"`
+	BackupDiskPercentUsage  *float64 `json:"backup_disk_percent_usage"`
+	KernelVersion           string   `json:"kernel_version"`
+	OS                      string   `json:"os"`
+	OSType                  string   `json:"os_type"`
 }
 
-func GetSystemInformation(rootDirectoryPath string) (*Information, error) {
+func GetSystemInformation(VolumesPath string, BackupPath string) (*Information, error) {
 	k, err := kernel.GetKernelVersion()
 	if err != nil {
 		return nil, err
@@ -114,14 +117,24 @@ func GetSystemInformation(rootDirectoryPath string) (*Information, error) {
 		memPercentUsage, memBytesUsage = &v, &memStats.Used
 	}
 
-	diskStats, err := disk.Usage(rootDirectoryPath)
-	var diskBytes, diskBytesUsage *uint64
-	var diskPercentUsage *float64
+	volumesDiskStats, err := disk.Usage(VolumesPath)
+	var volumesDiskBytes, volumesDiskBytesUsage *uint64
+	var volumesDiskPercentUsage *float64
 	if err == nil {
-		diskBytes, diskBytesUsage = &diskStats.Total, &diskStats.Used
-		v := math.Round(diskStats.UsedPercent*100) / 100
-		diskPercentUsage = &v
+		volumesDiskBytes, volumesDiskBytesUsage = &volumesDiskStats.Total, &volumesDiskStats.Used
+		v := math.Round(volumesDiskStats.UsedPercent*100) / 100
+		volumesDiskPercentUsage = &v
 	}
+
+	backupDiskStats, err := disk.Usage(BackupPath)
+	var backupDiskBytes, backupDiskBytesUsage *uint64
+	var backupDiskPercentUsage *float64
+	if err == nil {
+		backupDiskBytes, backupDiskBytesUsage = &backupDiskStats.Total, &backupDiskStats.Used
+		v := math.Round(backupDiskStats.UsedPercent*100) / 100
+		backupDiskPercentUsage = &v
+	}
+
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
@@ -145,18 +158,21 @@ func GetSystemInformation(rootDirectoryPath string) (*Information, error) {
 			},
 		},
 		System: System{
-			Architecture:       runtime.GOARCH,
-			CPUThreads:         runtime.NumCPU(),
-			CPUUsage:           cpuUsagePercent,
-			MemoryBytes:        info.MemTotal,
-			MemoryBytesUsage:   memBytesUsage,
-			MemoryPercentUsage: memPercentUsage,
-			DiskBytes:          diskBytes,
-			DiskBytesUsage:     diskBytesUsage,
-			DiskPercentUsage:   diskPercentUsage,
-			KernelVersion:      k.String(),
-			OS:                 os,
-			OSType:             runtime.GOOS,
+			Architecture:            runtime.GOARCH,
+			CPUThreads:              runtime.NumCPU(),
+			CPUUsage:                cpuUsagePercent,
+			MemoryBytes:             info.MemTotal,
+			MemoryBytesUsage:        memBytesUsage,
+			MemoryPercentUsage:      memPercentUsage,
+			VolumesDiskBytes:        volumesDiskBytes,
+			VolumesDiskBytesUsage:   volumesDiskBytesUsage,
+			VolumesDiskPercentUsage: volumesDiskPercentUsage,
+			BackupDiskBytes:         backupDiskBytes,
+			BackupDiskBytesUsage:    backupDiskBytesUsage,
+			BackupDiskPercentUsage:  backupDiskPercentUsage,
+			KernelVersion:           k.String(),
+			OS:                      os,
+			OSType:                  runtime.GOOS,
 		},
 	}, nil
 }
