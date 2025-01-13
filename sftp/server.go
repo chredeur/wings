@@ -38,38 +38,23 @@ func ValidateUUIDPair(value string, logger log.Interface) bool {
 
 	addPadding := func(part string) string {
 		switch len(part) % 4 {
-			case 2:
-			    return part + "=="
-			case 3:
-			    return part + "="
-			default:
-			    return part
+		case 2:
+			return part + "=="
+		case 3:
+			return part + "="
+		default:
+			return part
 		}
 	}
 	parts[0] = addPadding(parts[0])
 	parts[1] = addPadding(parts[1])
-	
-	isValidBase64 := func(value string) bool {
-		_, err := base64.StdEncoding.DecodeString(value)
-		if err != nil {
-			logger.WithField("value", value).WithError(err).Warn("Validation failed: invalid Base64 encoding")
-			return false
-		}
-		logger.WithField("value", value).Debug("Valid Base64 encoding")
-		return true
-	}
 
-	if !isValidBase64(parts[0]) || !isValidBase64(parts[1]) {
-		logger.Warn("Validation failed: one or both parts are not valid Base64")
-		return false
-	}
-
-	userDecoded, err := base64.StdEncoding.DecodeString(parts[0])
+	userDecoded, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
 		logger.WithField("part", parts[0]).WithError(err).Warn("Validation failed: Base64 decoding failed for user UUID")
 		return false
 	}
-	serverDecoded, err := base64.StdEncoding.DecodeString(parts[1])
+	serverDecoded, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		logger.WithField("part", parts[1]).WithError(err).Warn("Validation failed: Base64 decoding failed for server UUID")
 		return false
@@ -78,12 +63,11 @@ func ValidateUUIDPair(value string, logger log.Interface) bool {
 		"userDecoded":   string(userDecoded),
 		"serverDecoded": string(serverDecoded),
 	}).Debug("Successfully decoded Base64 parts")
-
+	
 	isValidUUID := func(decoded []byte) bool {
 		re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
 		return re.MatchString(string(decoded))
 	}
-
 	if !isValidUUID(userDecoded) {
 		logger.WithField("userUUID", string(userDecoded)).Warn("Validation failed: user UUID is not valid")
 		return false
@@ -93,6 +77,7 @@ func ValidateUUIDPair(value string, logger log.Interface) bool {
 		return false
 	}
 	logger.Debug("Validation succeeded: both UUIDs are valid")
+	
 	return true
 }
 
