@@ -25,6 +25,18 @@ import (
 	"github.com/pterodactyl/wings/server"
 )
 
+func isValidUUID(decoded []byte) bool {
+	if len(decoded) != 16 {
+		return false
+	}
+	// Formatter les octets en chaîne UUID
+	uuidString := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", 
+		decoded[0:4], decoded[4:6], decoded[6:8], decoded[8:10], decoded[10:])
+	// Vérifier si la chaîne formatée correspond à un UUID valide avec regex
+	re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
+	return re.MatchString(uuidString)
+}
+
 // ValidateUUIDPair checks if a string contains two valid base64-encoded UUIDs separated by a dot.
 func ValidateUUIDPair(value string, logger log.Interface) bool {
 	logger.WithField("input", value).Debug("Starting validation of UUID pair")
@@ -46,15 +58,7 @@ func ValidateUUIDPair(value string, logger log.Interface) bool {
 		logger.WithField("part", parts[1]).WithError(err).Warn("Validation failed: Base64 decoding failed for server UUID")
 		return false
 	}
-	logger.WithFields(log.Fields{
-		"userDecoded":   string(userDecoded),
-		"serverDecoded": string(serverDecoded),
-	}).Debug("Successfully decoded Base64 parts")
 	
-	isValidUUID := func(decoded []byte) bool {
-		re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
-		return re.MatchString(string(decoded))
-	}
 	if !isValidUUID(userDecoded) {
 		logger.WithField("userUUID", string(userDecoded)).Warn("Validation failed: user UUID is not valid")
 		return false
