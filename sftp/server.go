@@ -26,33 +26,61 @@ import (
 )
 
 // ValidateUUIDPair checks if a string contains two valid base64-encoded UUIDs separated by a dot.
-func ValidateUUIDPair(value string) bool {
+func ValidateUUIDPair(value string, logger log.Interface) bool {
+	logger.WithField("input", value).Debug("Starting validation of UUID pair")
+
 	parts := strings.Split(value, ".")
+	logger.WithField("parts", parts).Debug("Split input string into parts")
+
 	if len(parts) != 2 {
+		logger.Warn("Validation failed: input does not contain exactly one dot")
 		return false
 	}
+
 	isValidBase64 := func(value string) bool {
 		_, err := base64.StdEncoding.DecodeString(value)
-		return err == nil
+		if err != nil {
+			logger.WithField("value", value).WithError(err).Warn("Validation failed: invalid Base64 encoding")
+			return false
+		}
+		logger.WithField("value", value).Debug("Valid Base64 encoding")
+		return true
 	}
+
 	if !isValidBase64(parts[0]) || !isValidBase64(parts[1]) {
+		logger.Warn("Validation failed: one or both parts are not valid Base64")
 		return false
 	}
+
 	userDecoded, err := base64.StdEncoding.DecodeString(parts[0])
 	if err != nil {
+		logger.WithField("part", parts[0]).WithError(err).Warn("Validation failed: Base64 decoding failed for user UUID")
 		return false
 	}
 	serverDecoded, err := base64.StdEncoding.DecodeString(parts[1])
 	if err != nil {
+		logger.WithField("part", parts[1]).WithError(err).Warn("Validation failed: Base64 decoding failed for server UUID")
 		return false
 	}
+	logger.WithFields(log.Fields{
+		"userDecoded":   string(userDecoded),
+		"serverDecoded": string(serverDecoded),
+	}).Debug("Successfully decoded Base64 parts")
+
 	isValidUUID := func(decoded []byte) bool {
 		re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
 		return re.MatchString(string(decoded))
 	}
-	if !isValidUUID(userDecoded) || !isValidUUID(serverDecoded) {
+
+	if !isValidUUID(userDecoded) {
+		logger.WithField("userUUID", string(userDecoded)).Warn("Validation failed: user UUID is not valid")
 		return false
 	}
+	if !isValidUUID(serverDecoded) {
+		logger.WithField("serverUUID", string(serverDecoded)).Warn("Validation failed: server UUID is not valid")
+		return false
+	}
+	logger.Debug("Validation succeeded: both UUIDs are valid")
 	return true
 }
 
@@ -245,7 +273,7 @@ func (c *SFTPServer) makeCredentialsRequest(conn ssh.ConnMetadata, t remote.Sftp
 	logger := log.WithFields(log.Fields{"subsystem": "sftp", "method": request.Type, "username": request.User, "ip": request.IP})
 	logger.Debug("validating credentials for SFTP connection")
 
-	valid := ValidateUUIDPair(request.User)
+	valid := ValidateUUIDPair(request.User, logger)
 	if !valid {
 		logger.Warn("failed to validate user credentials (invalid format)")
 		return nil, &remote.SftpInvalidCredentialsError{}
