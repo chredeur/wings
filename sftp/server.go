@@ -31,12 +31,24 @@ func ValidateUUIDPair(value string, logger log.Interface) bool {
 
 	parts := strings.Split(value, ".")
 	logger.WithField("parts", parts).Debug("Split input string into parts")
-
 	if len(parts) != 2 {
 		logger.Warn("Validation failed: input does not contain exactly one dot")
 		return false
 	}
 
+	addPadding := func(part string) string {
+		switch len(part) % 4 {
+			case 2:
+			    return part + "=="
+			case 3:
+			    return part + "="
+			default:
+			    return part
+		}
+	}
+	parts[0] = addPadding(parts[0])
+	parts[1] = addPadding(parts[1])
+	
 	isValidBase64 := func(value string) bool {
 		_, err := base64.StdEncoding.DecodeString(value)
 		if err != nil {
