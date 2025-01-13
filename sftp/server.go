@@ -36,25 +36,12 @@ func ValidateUUIDPair(value string, logger log.Interface) bool {
 		return false
 	}
 
-	addPadding := func(part string) string {
-		switch len(part) % 4 {
-		case 2:
-			return part + "=="
-		case 3:
-			return part + "="
-		default:
-			return part
-		}
-	}
-	parts[0] = addPadding(parts[0])
-	parts[1] = addPadding(parts[1])
-
-	userDecoded, err := base64.RawURLEncoding.DecodeString(parts[0])
+	userDecoded, err := base64.URLEncoding.DecodeString(parts[0] + "==")
 	if err != nil {
 		logger.WithField("part", parts[0]).WithError(err).Warn("Validation failed: Base64 decoding failed for user UUID")
 		return false
 	}
-	serverDecoded, err := base64.RawURLEncoding.DecodeString(parts[1])
+	serverDecoded, err := base64.URLEncoding.DecodeString(parts[1] + "==")
 	if err != nil {
 		logger.WithField("part", parts[1]).WithError(err).Warn("Validation failed: Base64 decoding failed for server UUID")
 		return false
