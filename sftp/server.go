@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"fmt"
 	"encoding/base64"
 
 	"emperror.dev/errors"
@@ -29,10 +30,8 @@ func isValidUUID(decoded []byte) bool {
 	if len(decoded) != 16 {
 		return false
 	}
-	// Formatter les octets en chaîne UUID
 	uuidString := fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", 
 		decoded[0:4], decoded[4:6], decoded[6:8], decoded[8:10], decoded[10:])
-	// Vérifier si la chaîne formatée correspond à un UUID valide avec regex
 	re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
 	return re.MatchString(uuidString)
 }
