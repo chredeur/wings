@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"encoding/base64"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -24,10 +25,36 @@ import (
 	"github.com/pterodactyl/wings/server"
 )
 
-// Usernames all follow the same format, so don't even bother hitting the API if the username is not
-// at least in the expected format. This is very basic protection against random bots finding the SFTP
-// server and sending a flood of usernames.
-var validUsernameRegexp = regexp.MustCompile(`^(?i)(.+)\.([a-z0-9]{8})$`)
+// ValidateUUIDPair checks if a string contains two valid base64-encoded UUIDs separated by a dot.
+func ValidateUUIDPair(value string) bool {
+	parts := strings.Split(value, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	isValidBase64 := func(value string) bool {
+		_, err := base64.StdEncoding.DecodeString(value)
+		return err == nil
+	}
+	if !isValidBase64(parts[0]) || !isValidBase64(parts[1]) {
+		return false
+	}
+	userDecoded, err := base64.StdEncoding.DecodeString(parts[0])
+	if err != nil {
+		return false
+	}
+	serverDecoded, err := base64.StdEncoding.DecodeString(parts[1])
+	if err != nil {
+		return false
+	}
+	isValidUUID := func(decoded []byte) bool {
+		re := regexp.MustCompile(`^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$`)
+		return re.MatchString(string(decoded))
+	}
+	if !isValidUUID(userDecoded) || !isValidUUID(serverDecoded) {
+		return false
+	}
+	return true
+}
 
 //goland:noinspection GoNameStartsWithPackageName
 type SFTPServer struct {
@@ -218,7 +245,8 @@ func (c *SFTPServer) makeCredentialsRequest(conn ssh.ConnMetadata, t remote.Sftp
 	logger := log.WithFields(log.Fields{"subsystem": "sftp", "method": request.Type, "username": request.User, "ip": request.IP})
 	logger.Debug("validating credentials for SFTP connection")
 
-	if !validUsernameRegexp.MatchString(request.User) {
+	valid, err := ValidateUUIDPair(request.User)
+	if !valid {
 		logger.Warn("failed to validate user credentials (invalid format)")
 		return nil, &remote.SftpInvalidCredentialsError{}
 	}
