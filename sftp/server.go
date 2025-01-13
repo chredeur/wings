@@ -245,7 +245,7 @@ func (c *SFTPServer) makeCredentialsRequest(conn ssh.ConnMetadata, t remote.Sftp
 	logger := log.WithFields(log.Fields{"subsystem": "sftp", "method": request.Type, "username": request.User, "ip": request.IP})
 	logger.Debug("validating credentials for SFTP connection")
 
-	valid, err := ValidateUUIDPair(request.User)
+	valid := ValidateUUIDPair(request.User)
 	if !valid {
 		logger.Warn("failed to validate user credentials (invalid format)")
 		return nil, &remote.SftpInvalidCredentialsError{}
