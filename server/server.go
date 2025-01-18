@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -145,10 +146,25 @@ func (s *Server) Context() context.Context {
 
 // Returns all of the environment variables that should be assigned to a running
 // server instance.
+func isValidTimeZone(timeZone *string) bool {
+	if timeZone == nil {
+		return false
+	}
+	_, err := time.LoadLocation(*timeZone)
+	return err == nil
+}
+
 func (s *Server) GetEnvironmentVariables() []string {
+	var TimeZone string
+	if isValidTimeZone(s.Config().TimeZone) {
+		TimeZone = *s.Config().TimeZone
+	} else {
+		TimeZone = config.Get().System.Timezone
+	}
+	s.Log().Debug(fmt.Sprintf("Selected timezone: %s", TimeZone))
 	out := []string{
 		// TODO: allow this to be overridden by the user.
-		fmt.Sprintf("TZ=%s", config.Get().System.Timezone),
+		fmt.Sprintf("TZ=%s", TimeZone),
 		fmt.Sprintf("STARTUP=%s", s.Config().Invocation),
 		fmt.Sprintf("SERVER_MEMORY=%d", s.MemoryLimit()),
 		fmt.Sprintf("SERVER_IP=%s", s.Config().Allocations.DefaultMapping.Ip),

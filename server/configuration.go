@@ -46,6 +46,9 @@ type Configuration struct {
 	// server process.
 	EnvVars environment.Variables `json:"environment"`
 
+	// The timezone to be applied to the server.
+	TimeZone *string `json:"timezone"`
+
 	// Labels is a map of container labels that should be applied to the running server process.
 	Labels map[string]string `json:"labels"`
 
