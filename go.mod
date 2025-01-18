@@ -35,7 +35,7 @@ require (
 	github.com/klauspost/pgzip v1.2.6
 	github.com/magiconair/properties v1.8.9
 	github.com/mattn/go-colorable v0.1.14
-	github.com/mholt/archiver/v4 v4.0.0-alpha.9
+	github.com/mholt/archiver/v4 v4.0.0-alpha.8
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/sftp v1.13.7
