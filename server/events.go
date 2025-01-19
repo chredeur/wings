@@ -14,6 +14,7 @@ const (
 	ConsoleOutputEvent          = "console output"
 	StatusEvent                 = "status"
 	StatsEvent                  = "stats"
+	BackupRestoreStartedEvent   = "backup restore started"
 	BackupRestoreCompletedEvent = "backup restore completed"
 	BackupCompletedEvent        = "backup completed"
 	TransferLogsEvent           = "transfer logs"

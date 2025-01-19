@@ -114,6 +114,7 @@ func postServerRestoreBackup(c *gin.Context) {
 		}
 		go func(s *server.Server, b backup.BackupInterface, logger *log.Entry) {
 			logger.Info("starting restoration process for server backup using local driver")
+			s.Events().Publish(server.BackupRestoreStartedEvent, "")
 			if err := s.RestoreBackup(b, nil); err != nil {
 				logger.WithField("error", err).Error("failed to restore local backup to server")
 			}
@@ -158,6 +159,7 @@ func postServerRestoreBackup(c *gin.Context) {
 
 	go func(s *server.Server, uuid string, logger *log.Entry) {
 		logger.Info("starting restoration process for server backup using S3 driver")
+		s.Events().Publish(server.BackupRestoreStartedEvent, "")
 		if err := s.RestoreBackup(backup.NewS3(client, uuid, ""), res.Body); err != nil {
 			logger.WithField("error", errors.WithStack(err)).Error("failed to restore remote S3 backup to server")
 		}
