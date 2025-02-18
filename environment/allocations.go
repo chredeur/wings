@@ -28,6 +28,9 @@ type Allocations struct {
 	// Mappings contains all the ports that should be assigned to a given server
 	// attached to the IP they correspond to.
 	Mappings map[string][]int `json:"mappings"`
+
+	// Current node fqdn for Environment Variables
+	NodeFQDN string `json:"node_fqdn"`
 }
 
 // Converts the server allocation mappings into a format that can be understood by Docker. While
