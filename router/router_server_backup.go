@@ -53,6 +53,14 @@ func postServerBackup(c *gin.Context) {
 		}
 	}(adapter, s, logger)
 
+	s.Events().Publish(server.BackupStartedEvent+":"+adapter.Identifier(), map[string]interface{}{
+		"uuid":          adapter.Identifier(),
+		"is_successful": true,
+		"checksum":      "",
+		"checksum_type": "sha1",
+		"file_size":     0,
+	})
+
 	c.Status(http.StatusAccepted)
 }
 
@@ -179,6 +187,7 @@ func postServerRestoreBackup(c *gin.Context) {
 // response.
 func deleteServerBackup(c *gin.Context) {
 	b, _, err := backup.LocateLocal(middleware.ExtractApiClient(c), c.Param("backup"))
+	s := middleware.ExtractServer(c)
 	if err != nil {
 		// Just return from the function at this point if the backup was not located.
 		if errors.Is(err, os.ErrNotExist) {
@@ -197,5 +206,14 @@ func deleteServerBackup(c *gin.Context) {
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
+
+	s.Events().Publish(server.BackupDeletedEvent+":"+b.Identifier(), map[string]interface{}{
+		"uuid":          b.Identifier(),
+		"is_successful": true,
+		"checksum":      b.Checksum(),
+		"checksum_type": "sha1",
+		"file_size":     b.Size(),
+	})
+
 	c.Status(http.StatusNoContent)
 }

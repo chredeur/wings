@@ -16,6 +16,8 @@ const (
 	StatsEvent                  = "stats"
 	BackupRestoreStartedEvent   = "backup restore started"
 	BackupRestoreCompletedEvent = "backup restore completed"
+	BackupStartedEvent          = "backup started"
+	BackupDeletedEvent          = "backup deleted"
 	BackupCompletedEvent        = "backup completed"
 	TransferLogsEvent           = "transfer logs"
 	TransferStatusEvent         = "transfer status"
