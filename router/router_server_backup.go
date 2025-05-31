@@ -207,12 +207,25 @@ func deleteServerBackup(c *gin.Context) {
 		return
 	}
 
+	checksumBytes, err := b.Checksum()
+	var checksum string
+	if err != nil {
+		checksum = ""
+	} else {
+		checksum = string(checksumBytes)
+	}
+
+	size, err := b.Size()
+	if err != nil {
+		size = 0
+	}
+
 	s.Events().Publish(server.BackupDeletedEvent+":"+b.Identifier(), map[string]interface{}{
 		"uuid":          b.Identifier(),
 		"is_successful": true,
-		"checksum":      b.Checksum(),
+		"checksum":      checksum,
 		"checksum_type": "sha1",
-		"file_size":     b.Size(),
+		"file_size":     size,
 	})
 
 	c.Status(http.StatusNoContent)
