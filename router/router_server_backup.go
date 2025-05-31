@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/hex"
 	"net/http"
 	"os"
 	"strings"
@@ -212,7 +213,7 @@ func deleteServerBackup(c *gin.Context) {
 	if err != nil {
 		checksum = ""
 	} else {
-		checksum = string(checksumBytes)
+		checksum = hex.EncodeToString(checksumBytes)
 	}
 
 	size, err := b.Size()
