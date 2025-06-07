@@ -52,3 +52,6 @@ debug
 *.pprof
 *.pdf
 pprof.*
+
+# For me
+BuildInstruction.md
