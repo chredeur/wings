@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"time"
 
@@ -25,13 +26,14 @@ type S3Backup struct {
 
 var _ BackupInterface = (*S3Backup)(nil)
 
-func NewS3(client remote.Client, uuid string, ignore string) *S3Backup {
+func NewS3(client remote.Client, uuid string, ignore string, serverId string) *S3Backup {
 	return &S3Backup{
 		Backup{
-			client:  client,
-			Uuid:    uuid,
-			Ignore:  ignore,
-			adapter: S3BackupAdapter,
+			client:   client,
+			Uuid:     uuid,
+			Ignore:   ignore,
+			ServerId: serverId,
+			adapter:  S3BackupAdapter,
 		},
 	}
 }
@@ -54,6 +56,12 @@ func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ig
 	a := &filesystem.Archive{
 		Filesystem: fsys,
 		Ignore:     ignore,
+	}
+
+	// Ensure the server backup directory exists
+	serverBackupDir := path.Join(config.Get().System.BackupDirectory, s.ServerId)
+	if err := os.MkdirAll(serverBackupDir, 0o755); err != nil {
+		return nil, errors.Wrap(err, "backup: failed to create server backup directory")
 	}
 
 	s.log().WithField("path", s.Path()).Info("creating backup for server")

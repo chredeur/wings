@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -378,4 +379,13 @@ func (s *Server) ToAPIResponse() APIResponse {
 		Utilization:   s.Proc(),
 		Configuration: *s.Config(),
 	}
+}
+
+func (s *Server) RemoveAllServerBackups() error {
+	sp := path.Join(config.Get().System.BackupDirectory, s.ID())
+	// This should never be possible, but we'll check it anyway.
+	if sp == config.Get().System.BackupDirectory {
+		return errors.New("invalid server, cannot delete backup dir")
+	}
+	return os.RemoveAll(sp)
 }

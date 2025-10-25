@@ -254,6 +254,14 @@ func deleteServer(c *gin.Context) {
 		log.WithFields(log.Fields{"server_id": ID, "error": err}).Warn("failed to remove server install log during deletion process")
 	}
 
+	// Remove all server backups unless config setting is specified
+	if config.Get().System.Backups.RemoveBackupsOnServerDelete == true {
+		if err := s.RemoveAllServerBackups(); err != nil {
+			middleware.CaptureAndAbort(c, err)
+			return
+		}
+	}
+
 	// Destroy the environment; in Docker this will handle a running container and
 	// forcibly terminate it before removing the container, so we do not need to handle
 	// that here.
@@ -301,4 +309,14 @@ func postServerDenyWSTokens(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func deleteAllServerBackups(c *gin.Context) {
+	s := ExtractServer(c)
+
+	if err := s.RemoveAllServerBackups(); err != nil {
+		middleware.CaptureAndAbort(c, err)
+	} else {
+		c.Status(http.StatusNoContent)
+	}
 }

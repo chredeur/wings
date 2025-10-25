@@ -108,6 +108,8 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		backup := server.Group("/backup")
 		{
 			backup.POST("", postServerBackup)
+			// Deletes all backups for a server
+			backup.DELETE("/delete-all", deleteAllServerBackups)
 			backup.POST("/:backup/restore", postServerRestoreBackup)
 			backup.DELETE("/:backup", deleteServerBackup)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
 
 	"emperror.dev/errors"
 	"github.com/juju/ratelimit"
@@ -20,21 +21,22 @@ type LocalBackup struct {
 
 var _ BackupInterface = (*LocalBackup)(nil)
 
-func NewLocal(client remote.Client, uuid string, ignore string) *LocalBackup {
+func NewLocal(client remote.Client, uuid string, ignore string, serverId string) *LocalBackup {
 	return &LocalBackup{
 		Backup{
-			client:  client,
-			Uuid:    uuid,
-			Ignore:  ignore,
-			adapter: LocalBackupAdapter,
+			client:   client,
+			Uuid:     uuid,
+			Ignore:   ignore,
+			ServerId: serverId,
+			adapter:  LocalBackupAdapter,
 		},
 	}
 }
 
 // LocateLocal finds the backup for a server and returns the local path. This
 // will obviously only work if the backup was created as a local backup.
-func LocateLocal(client remote.Client, uuid string) (*LocalBackup, os.FileInfo, error) {
-	b := NewLocal(client, uuid, "")
+func LocateLocal(client remote.Client, uuid string, serverId string) (*LocalBackup, os.FileInfo, error) {
+	b := NewLocal(client, uuid, "", serverId)
 	st, err := os.Stat(b.Path())
 	if err != nil {
 		return nil, nil, err
@@ -63,6 +65,12 @@ func (b *LocalBackup) Generate(ctx context.Context, fsys *filesystem.Filesystem,
 	a := &filesystem.Archive{
 		Filesystem: fsys,
 		Ignore:     ignore,
+	}
+
+	// Ensure the server backup directory exists
+	serverBackupDir := path.Join(config.Get().System.BackupDirectory, b.ServerId)
+	if err := os.MkdirAll(serverBackupDir, 0o755); err != nil {
+		return nil, errors.Wrap(err, "backup: failed to create server backup directory")
 	}
 
 	b.log().WithField("path", b.Path()).Info("creating backup for server")

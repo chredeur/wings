@@ -78,6 +78,9 @@ type Backup struct {
 	// compatible with a standard .gitignore structure.
 	Ignore string `json:"ignore"`
 
+	// The server ID this backup belongs to
+	ServerId string `json:"server_id"`
+
 	client     remote.Client
 	adapter    AdapterType
 	logContext map[string]interface{}
@@ -93,7 +96,7 @@ func (b *Backup) Identifier() string {
 
 // Path returns the path for this specific backup.
 func (b *Backup) Path() string {
-	return path.Join(config.Get().System.BackupDirectory, b.Identifier()+".tar.gz")
+	return path.Join(config.Get().System.BackupDirectory, b.ServerId, b.Identifier()+".tar.gz")
 }
 
 // Size returns the size of the generated backup.
