@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -33,7 +35,19 @@ func getServerFileContents(c *gin.Context) {
 	p := strings.TrimLeft(c.Query("file"), "/")
 	f, st, err := s.Filesystem().File(p)
 	if err != nil {
-		middleware.CaptureAndAbort(c, err)
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error":      "The requested resource was not found on the system.",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
+		} else if strings.Contains(err.Error(), "filesystem: is a directory") {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error":      "Cannot perform that action: file is a directory.",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
+		} else {
+			middleware.CaptureAndAbort(c, err)
+		}
 		return
 	}
 	defer f.Close()
@@ -78,11 +92,19 @@ func getServerFileContents(c *gin.Context) {
 func getServerListDirectory(c *gin.Context) {
 	s := ExtractServer(c)
 	dir := c.Query("directory")
-	if stats, err := s.Filesystem().ListDirectory(dir); err != nil {
+	stats, err := s.Filesystem().ListDirectory(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error":      "The requested directory was not found on the system.",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
-	} else {
-		c.JSON(http.StatusOK, stats)
+		return
 	}
+	c.JSON(http.StatusOK, stats)
 }
 
 type renameFile struct {
@@ -626,4 +648,116 @@ func handleFileUpload(p string, s *server.Server, header *multipart.FileHeader) 
 		return err
 	}
 	return nil
+}
+
+func getFilesStat(c *gin.Context) {
+	s := ExtractServer(c)
+	filePath := c.Query("file")
+
+	if filePath == "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"error": "File path is required",
+		})
+		return
+	}
+
+	cleanPath := strings.TrimLeft(filePath, "/")
+	if err := s.Filesystem().IsIgnored(cleanPath); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	stat, err := s.Filesystem().Stat(cleanPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error":      "File not found",
+				"request_id": c.Writer.Header().Get("X-Request-Id"),
+			})
+			return
+		}
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, stat)
+}
+
+func postFilesTouch(c *gin.Context) {
+	s := ExtractServer(c)
+
+	var data struct {
+		File string `json:"file" binding:"required"`
+	}
+
+	if err := c.BindJSON(&data); err != nil {
+		return
+	}
+
+	cleanPath := strings.TrimLeft(data.File, "/")
+	if err := s.Filesystem().IsIgnored(cleanPath); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	if _, err := s.Filesystem().Touch(cleanPath, os.O_RDONLY|os.O_CREATE); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+var diskUsageCache struct {
+	sync.RWMutex
+	data map[string]diskUsageCacheEntry
+}
+
+type diskUsageCacheEntry struct {
+	Usage     int64
+	Limit     int64
+	Timestamp time.Time
+}
+
+func init() {
+	diskUsageCache.data = make(map[string]diskUsageCacheEntry)
+}
+
+func getFilesDiskUsage(c *gin.Context) {
+	s := ExtractServer(c)
+
+	diskUsageCache.RLock()
+	cached, exists := diskUsageCache.data[s.ID()]
+	diskUsageCache.RUnlock()
+
+	if exists && time.Since(cached.Timestamp) < 30*time.Second {
+		c.JSON(http.StatusOK, gin.H{
+			"used":    cached.Usage,
+			"limit":   cached.Limit,
+			"percent": float64(cached.Usage) / float64(cached.Limit) * 100,
+		})
+		return
+	}
+
+	usage, err := s.Filesystem().DiskUsage(false)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	limit := s.DiskSpace()
+
+	diskUsageCache.Lock()
+	diskUsageCache.data[s.ID()] = diskUsageCacheEntry{
+		Usage:     usage,
+		Limit:     limit,
+		Timestamp: time.Now(),
+	}
+	diskUsageCache.Unlock()
+
+	c.JSON(http.StatusOK, gin.H{
+		"used":    usage,
+		"limit":   limit,
+		"percent": float64(usage) / float64(limit) * 100,
+	})
 }

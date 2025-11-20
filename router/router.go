@@ -91,6 +91,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		{
 			files.GET("/contents", getServerFileContents)
 			files.GET("/list-directory", getServerListDirectory)
+			files.GET("/search", getFilesBySearch)
 			files.PUT("/rename", putServerRenameFiles)
 			files.POST("/copy", postServerCopyFile)
 			files.POST("/write", postServerWriteFile)
@@ -103,6 +104,23 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 			files.GET("/pull", middleware.RemoteDownloadEnabled(), getServerPullingFiles)
 			files.POST("/pull", middleware.RemoteDownloadEnabled(), postServerPullRemoteFile)
 			files.DELETE("/pull/:download", middleware.RemoteDownloadEnabled(), deleteServerPullRemoteFile)
+
+			upload := files.Group("/upload")
+			{
+				upload.POST("/init", postInitChunkedUpload)
+				upload.POST("/chunk", postUploadChunk)
+				upload.POST("/finalize", postFinalizeUpload)
+				upload.DELETE("/:upload_id", deleteChunkedUpload)
+			}
+
+			files.GET("/lines", getFileLines)
+			files.GET("/metadata", getFileMetadata)
+			files.POST("/replace-line", postReplaceLine)
+			files.POST("/insert-lines", postInsertLines)
+			files.POST("/delete-lines", postDeleteLines)
+			files.GET("/stat", getFilesStat)
+			files.POST("/touch", postFilesTouch)
+			files.GET("/disk-usage", getFilesDiskUsage)
 		}
 
 		backup := server.Group("/backup")

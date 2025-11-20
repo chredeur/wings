@@ -356,6 +356,43 @@ type Configuration struct {
 
 	// IgnorePanelConfigUpdates causes confiuration updates that are sent by the panel to be ignored.
 	IgnorePanelConfigUpdates bool `json:"ignore_panel_config_updates" yaml:"ignore_panel_config_updates"`
+
+	SearchRecursion SearchRecursion `yaml:"Search"`
+	ChunkedUpload   ChunkedUpload   `yaml:"ChunkedUpload"`
+	PartialEdit     PartialEdit     `yaml:"PartialEdit"`
+}
+
+// SearchRecursion holds the configuration for directory search recursion settings.
+type SearchRecursion struct {
+	// BlacklistedDirs is a list of directory names that should be excluded from the recursion.
+	BlacklistedDirs []string `default:"[\"node_modules\", \".git\", \".wine\", \"appcache\", \"depotcache\", \"vendor\"]" yaml:"blacklisted_dirs" json:"blacklisted_dirs"`
+
+	// MaxRecursionDepth specifies the maximum depth for directory recursion.
+	MaxRecursionDepth int `default:"8" yaml:"max_recursion_depth" json:"max_recursion_depth"`
+}
+
+// ChunkedUpload holds the configuration for chunked file upload.
+type ChunkedUpload struct {
+	// MaxFileSize is the maximum file size allowed for chunked upload (in MB).
+	MaxFileSize int64 `default:"10240" yaml:"max_file_size" json:"max_file_size"`
+
+	// MaxConcurrentUploads is the maximum number of concurrent uploads per server.
+	MaxConcurrentUploads int `default:"5" yaml:"max_concurrent_uploads" json:"max_concurrent_uploads"`
+
+	// ChunkExpirationHours is the number of hours after which incomplete uploads are cleaned up.
+	ChunkExpirationHours int `default:"24" yaml:"chunk_expiration_hours" json:"chunk_expiration_hours"`
+}
+
+// PartialEdit holds the configuration for partial file editing.
+type PartialEdit struct {
+	// MaxLinesPerRequest is the maximum number of lines that can be fetched in one request.
+	MaxLinesPerRequest int `default:"500" yaml:"max_lines_per_request" json:"max_lines_per_request"`
+
+	// MaxLineSize is the maximum size of a single line (in bytes).
+	MaxLineSize int64 `default:"10240" yaml:"max_line_size" json:"max_line_size"`
+
+	// EnableLineCaching enables caching of line positions for frequently accessed files.
+	EnableLineCaching bool `default:"true" yaml:"enable_line_caching" json:"enable_line_caching"`
 }
 
 // NewAtPath creates a new struct and set the path where it should be stored.
