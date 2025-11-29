@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"emperror.dev/errors"
@@ -23,8 +24,8 @@ import (
 func getFileLines(c *gin.Context) {
 	s := middleware.ExtractServer(c)
 	filePath := c.Query("file")
-	startLine := c.GetInt("start")
-	endLine := c.GetInt("end")
+	startLine, _ := strconv.Atoi(c.Query("start"))
+	endLine, _ := strconv.Atoi(c.Query("end"))
 
 	if filePath == "" {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
