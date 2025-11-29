@@ -297,28 +297,41 @@ func (fs *Filesystem) findCopySuffix(dirfd int, name, extension string) (string,
 	return name + suffix + extension, nil
 }
 
-// Copy copies a given file to the same location and appends a suffix to the
-// file to indicate that it has been copied.
+// Copy copies a given file or directory to the same location and appends a suffix to the
+// name to indicate that it has been copied.
 func (fs *Filesystem) Copy(p string) error {
 	dirfd, name, closeFd, err := fs.unixFS.SafePath(p)
 	defer closeFd()
 	if err != nil {
 		return err
 	}
+
+	info, err := fs.unixFS.Lstatat(dirfd, name)
+	if err != nil {
+		return err
+	}
+
+	// Handle directory copy
+	if info.IsDir() {
+		return fs.copyDirectory(dirfd, name, info)
+	}
+
+	// Handle regular file copy
+	if !info.Mode().IsRegular() {
+		return ufs.ErrNotExist
+	}
+
+	return fs.copyFile(dirfd, name, info)
+}
+
+// copyFile copies a single file to a new location with a copy suffix.
+func (fs *Filesystem) copyFile(dirfd int, name string, info ufs.FileInfo) error {
 	source, err := fs.unixFS.OpenFileat(dirfd, name, ufs.O_RDONLY, 0)
 	if err != nil {
 		return err
 	}
 	defer source.Close()
-	info, err := source.Stat()
-	if err != nil {
-		return err
-	}
-	if info.IsDir() || !info.Mode().IsRegular() {
-		// If this is a directory or not a regular file, just throw a not-exist error
-		// since anything calling this function should understand what that means.
-		return ufs.ErrNotExist
-	}
+
 	currentSize := info.Size()
 
 	// Check that copying this file wouldn't put the server over its limit.
@@ -331,8 +344,6 @@ func (fs *Filesystem) Copy(p string) error {
 	baseName := strings.TrimSuffix(base, extension)
 
 	// Ensure that ".tar" is also counted as apart of the file extension.
-	// There might be a better way to handle this for other double file extensions,
-	// but this is a good workaround for now.
 	if strings.HasSuffix(baseName, ".tar") {
 		extension = ".tar" + extension
 		baseName = strings.TrimSuffix(baseName, ".tar")
@@ -346,9 +357,8 @@ func (fs *Filesystem) Copy(p string) error {
 	if err != nil {
 		return err
 	}
+	defer dst.Close()
 
-	// Do not use CopyBuffer here, it is wasteful as the file implements
-	// io.ReaderFrom, which causes it to not use the buffer anyways.
 	n, err := io.Copy(dst, io.LimitReader(source, currentSize))
 	fs.unixFS.Add(n)
 
@@ -357,8 +367,176 @@ func (fs *Filesystem) Copy(p string) error {
 			return err
 		}
 	}
-	// Return the error from io.Copy.
 	return err
+}
+
+// copyDirectory recursively copies a directory to a new location with a copy suffix.
+func (fs *Filesystem) copyDirectory(dirfd int, name string, info ufs.FileInfo) error {
+	// Calculate total size of directory (only regular files)
+	var totalSize int64
+	if err := fs.unixFS.WalkDirat(dirfd, name, func(_ int, _, _ string, d ufs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && d.Type().IsRegular() {
+			if fi, err := d.Info(); err == nil {
+				totalSize += fi.Size()
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	// Check that copying this directory wouldn't put the server over its limit.
+	if err := fs.HasSpaceFor(totalSize); err != nil {
+		return err
+	}
+
+	// Find a unique name for the copy
+	baseName := info.Name()
+	newName, err := fs.findCopySuffix(dirfd, baseName, "")
+	if err != nil {
+		return err
+	}
+
+	// Create the new directory
+	if err := fs.unixFS.Mkdirat(dirfd, newName, info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	uid := config.Get().System.User.Uid
+	gid := config.Get().System.User.Gid
+
+	if !fs.isTest {
+		if err := fs.unixFS.Lchownat(dirfd, newName, uid, gid); err != nil {
+			// Cleanup: remove the created directory on chown failure
+			fs.unixFS.Remove(newName)
+			return err
+		}
+	}
+
+	// Track if we need to cleanup on error
+	var copyErr error
+
+	// Walk through the source directory and copy all contents
+	copyErr = fs.unixFS.WalkDirat(dirfd, name, func(srcDirfd int, srcName, relative string, d ufs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip the root directory itself
+		if relative == "." {
+			return nil
+		}
+
+		fi, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		// Skip symlinks for security (prevent symlink attacks)
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+
+		// Get the destination path relative to the new directory
+		destPath := relative
+
+		if d.IsDir() {
+			// Create subdirectory in the copy
+			if err := fs.unixFS.MkdirAll(filepath.Join(newName, destPath), fi.Mode().Perm()); err != nil {
+				return err
+			}
+			if !fs.isTest {
+				subDirfd, subName, closeSubFd, err := fs.unixFS.SafePath(filepath.Join(newName, destPath))
+				if err != nil {
+					return err
+				}
+				chownErr := fs.unixFS.Lchownat(subDirfd, subName, uid, gid)
+				closeSubFd()
+				if chownErr != nil {
+					return chownErr
+				}
+			}
+		} else if fi.Mode().IsRegular() {
+			// Copy file using helper to ensure proper resource cleanup
+			if err := fs.copySingleFile(srcDirfd, srcName, newName, destPath, fi, uid, gid); err != nil {
+				return err
+			}
+		}
+		// Skip other file types (devices, sockets, etc.) for security
+
+		return nil
+	})
+
+	// Cleanup on error: remove partially copied directory
+	if copyErr != nil {
+		fs.Delete(newName)
+		return copyErr
+	}
+
+	return nil
+}
+
+// copySingleFile copies a single file during directory copy operation.
+// This helper ensures proper resource cleanup without defer accumulation.
+func (fs *Filesystem) copySingleFile(srcDirfd int, srcName, newName, destPath string, fi ufs.FileInfo, uid, gid int) error {
+	// Open source file
+	srcFile, err := fs.unixFS.OpenFileat(srcDirfd, srcName, ufs.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+
+	// Create parent directories if needed
+	destDir := filepath.Dir(destPath)
+	if destDir != "." {
+		if err := fs.unixFS.MkdirAll(filepath.Join(newName, destDir), 0o755); err != nil {
+			srcFile.Close()
+			return err
+		}
+	}
+
+	// Get safe path for destination
+	destFullPath := filepath.Join(newName, destPath)
+	destDirfd, destName, closeDestFd, err := fs.unixFS.SafePath(destFullPath)
+	if err != nil {
+		srcFile.Close()
+		return err
+	}
+
+	// Create destination file
+	dstFile, err := fs.unixFS.OpenFileat(destDirfd, destName, ufs.O_WRONLY|ufs.O_CREATE, fi.Mode())
+	if err != nil {
+		closeDestFd()
+		srcFile.Close()
+		return err
+	}
+
+	// Copy content
+	n, copyErr := io.Copy(dstFile, srcFile)
+
+	// Close files immediately (not deferred) to free resources
+	dstFile.Close()
+	srcFile.Close()
+
+	if copyErr != nil {
+		closeDestFd()
+		return copyErr
+	}
+
+	fs.unixFS.Add(n)
+
+	// Set ownership
+	if !fs.isTest {
+		if err := fs.unixFS.Lchownat(destDirfd, destName, uid, gid); err != nil {
+			closeDestFd()
+			return err
+		}
+	}
+
+	closeDestFd()
+	return nil
 }
 
 // TruncateRootDirectory removes _all_ files and directories from a server's
