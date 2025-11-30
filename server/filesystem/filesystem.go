@@ -436,7 +436,7 @@ func (fs *Filesystem) copyDirectory(dirfd int, name string, info ufs.FileInfo) e
 		}
 
 		// Skip symlinks for security (prevent symlink attacks)
-		if fi.Mode()&os.ModeSymlink != 0 {
+		if fi.Mode()&ufs.ModeSymlink != 0 {
 			return nil
 		}
 
