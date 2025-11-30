@@ -3,6 +3,7 @@ package router
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -556,9 +557,28 @@ func getArchiveTaskStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, task)
 }
 
+// fileMode is a custom type that can unmarshal both string and number JSON values
+type fileMode string
+
+func (fm *fileMode) UnmarshalJSON(data []byte) error {
+	// Try to unmarshal as string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*fm = fileMode(s)
+		return nil
+	}
+	// Try to unmarshal as number
+	var n int64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*fm = fileMode(strconv.FormatInt(n, 10))
+		return nil
+	}
+	return errors.New("mode must be a string or number")
+}
+
 type chmodFile struct {
-	File string `json:"file"`
-	Mode string `json:"mode"`
+	File string   `json:"file"`
+	Mode fileMode `json:"mode"`
 }
 
 var errInvalidFileMode = errors.New("invalid file mode")
@@ -592,7 +612,7 @@ func postServerChmodFile(c *gin.Context) {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-				mode, err := strconv.ParseUint(p.Mode, 8, 32)
+				mode, err := strconv.ParseUint(string(p.Mode), 8, 32)
 				if err != nil {
 					return errInvalidFileMode
 				}
