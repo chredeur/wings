@@ -98,6 +98,12 @@ func getFileLines(c *gin.Context) {
 	}
 
 	if err := scanner.Err(); err != nil {
+		if err == bufio.ErrTooLong {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "File contains lines that exceed the maximum allowed size. This file cannot be read line by line.",
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
@@ -157,6 +163,12 @@ func postReplaceLine(c *gin.Context) {
 	file.Close()
 
 	if err := scanner.Err(); err != nil {
+		if err == bufio.ErrTooLong {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "File contains lines that exceed the maximum allowed size.",
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
@@ -229,6 +241,12 @@ func postInsertLines(c *gin.Context) {
 	file.Close()
 
 	if err := scanner.Err(); err != nil {
+		if err == bufio.ErrTooLong {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "File contains lines that exceed the maximum allowed size.",
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
@@ -304,6 +322,12 @@ func postDeleteLines(c *gin.Context) {
 	file.Close()
 
 	if err := scanner.Err(); err != nil {
+		if err == bufio.ErrTooLong {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "File contains lines that exceed the maximum allowed size.",
+			})
+			return
+		}
 		middleware.CaptureAndAbort(c, err)
 		return
 	}
@@ -440,6 +464,9 @@ func detectLineEnding(file *os.File) string {
 // using buffered scanning without loading the entire file into memory.
 func countLines(file *os.File) int {
 	scanner := bufio.NewScanner(file)
+	maxLineSize := config.Get().PartialEdit.MaxLineSize
+	buf := make([]byte, maxLineSize)
+	scanner.Buffer(buf, int(maxLineSize))
 	count := 0
 	for scanner.Scan() {
 		count++
