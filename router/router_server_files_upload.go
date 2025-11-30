@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"time"
 
 	"emperror.dev/errors"
@@ -94,6 +95,51 @@ func (cm *ChunkManager) DeleteSession(uploadID string) {
 	delete(cm.sessions, uploadID)
 }
 
+// GetReservedSpace calculates the total space reserved by all active upload sessions.
+// This includes both received chunks and space reserved for pending chunks.
+func (cm *ChunkManager) GetReservedSpace() int64 {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	var totalReserved int64
+	for _, session := range cm.sessions {
+		totalReserved += session.FileSize
+	}
+	return totalReserved
+}
+
+// HasTmpSpaceFor checks if there's enough space in the temp directory to store
+// chunks for a new upload of the given size. It considers both the physical
+// available space and space already reserved by active upload sessions.
+func (cm *ChunkManager) HasTmpSpaceFor(fileSize int64) error {
+	tmpDir := os.TempDir()
+
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(tmpDir, &stat); err != nil {
+		return errors.Wrap(err, "failed to check temp directory space")
+	}
+
+	availableSpace := int64(stat.Bavail) * int64(stat.Bsize)
+
+	reservedSpace := cm.GetReservedSpace()
+
+	effectiveAvailable := availableSpace - reservedSpace
+
+	// Add a 10% safety margin to avoid filling the disk completely
+	requiredSpace := int64(float64(fileSize) * 1.1)
+
+	if effectiveAvailable < requiredSpace {
+		availableMB := effectiveAvailable / (1024 * 1024)
+		requiredMB := requiredSpace / (1024 * 1024)
+		return errors.New(fmt.Sprintf(
+			"insufficient temp directory space: %d MB available, %d MB required (including safety margin)",
+			availableMB, requiredMB,
+		))
+	}
+
+	return nil
+}
+
 func (cm *ChunkManager) CleanupExpiredSessions() {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
@@ -169,6 +215,14 @@ func postInitChunkedUpload(c *gin.Context) {
 
 	if err := s.Filesystem().HasSpaceErr(true); err != nil {
 		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	// Check if temp directory has enough space for the upload chunks
+	if err := globalChunkManager.HasTmpSpaceFor(data.FileSize); err != nil {
+		c.AbortWithStatusJSON(http.StatusInsufficientStorage, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 
