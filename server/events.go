@@ -22,6 +22,10 @@ const (
 	TransferLogsEvent           = "transfer logs"
 	TransferStatusEvent         = "transfer status"
 	DeletedEvent                = "deleted"
+	ArchiveStartedEvent         = "archive started"
+	ArchiveCompletedEvent       = "archive completed"
+	ArchiveFailedEvent          = "archive failed"
+	ArchiveProgressEvent        = "archive progress"
 )
 
 // Events returns the server's emitter instance.

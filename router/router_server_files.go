@@ -22,6 +22,7 @@ import (
 
 	"github.com/pterodactyl/wings/config"
 	"github.com/pterodactyl/wings/internal/models"
+	"github.com/pterodactyl/wings/router/archiver"
 	"github.com/pterodactyl/wings/router/downloader"
 	"github.com/pterodactyl/wings/router/middleware"
 	"github.com/pterodactyl/wings/router/tokens"
@@ -421,8 +422,9 @@ func postServerCompressFiles(c *gin.Context) {
 	s := ExtractServer(c)
 
 	var data struct {
-		RootPath string   `json:"root"`
-		Files    []string `json:"files"`
+		RootPath   string   `json:"root"`
+		Files      []string `json:"files"`
+		Foreground bool     `json:"foreground"`
 	}
 
 	if err := c.BindJSON(&data); err != nil {
@@ -443,6 +445,17 @@ func postServerCompressFiles(c *gin.Context) {
 		return
 	}
 
+	// Async mode: run in background and return immediately
+	if !data.Foreground {
+		task := archiver.NewCompressTask(s, data.RootPath, data.Files)
+		go task.Execute()
+		c.JSON(http.StatusAccepted, gin.H{
+			"identifier": task.Identifier,
+		})
+		return
+	}
+
+	// Sync mode: wait for completion (original behavior)
 	f, err := s.Filesystem().CompressFiles(data.RootPath, data.Files)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
@@ -460,8 +473,9 @@ func postServerCompressFiles(c *gin.Context) {
 // for the server.
 func postServerDecompressFiles(c *gin.Context) {
 	var data struct {
-		RootPath string `json:"root"`
-		File     string `json:"file"`
+		RootPath   string `json:"root"`
+		File       string `json:"file"`
+		Foreground bool   `json:"foreground"`
 	}
 	if err := c.BindJSON(&data); err != nil {
 		return
@@ -481,6 +495,17 @@ func postServerDecompressFiles(c *gin.Context) {
 		return
 	}
 
+	// Async mode: run in background and return immediately
+	if !data.Foreground {
+		task := archiver.NewDecompressTask(s, data.RootPath, data.File)
+		go task.Execute()
+		c.JSON(http.StatusAccepted, gin.H{
+			"identifier": task.Identifier,
+		})
+		return
+	}
+
+	// Sync mode: wait for completion (original behavior)
 	lg.Info("starting file decompression")
 	if err := s.Filesystem().DecompressFile(context.Background(), data.RootPath, data.File); err != nil {
 		// If the file is busy for some reason just return a nicer error to the user since there is not
@@ -497,6 +522,38 @@ func postServerDecompressFiles(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// getArchiveTasks returns all archive tasks for the server
+func getArchiveTasks(c *gin.Context) {
+	s := ExtractServer(c)
+	tasks := archiver.GetServerTasks(s.ID())
+	c.JSON(http.StatusOK, gin.H{
+		"tasks": tasks,
+	})
+}
+
+// getArchiveTaskStatus returns the status of a specific archive task
+func getArchiveTaskStatus(c *gin.Context) {
+	s := ExtractServer(c)
+	identifier := c.Param("identifier")
+
+	task := archiver.GetTask(identifier)
+	if task == nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"error": "Archive task not found",
+		})
+		return
+	}
+
+	if !task.BelongsTo(s) {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "Archive task does not belong to this server",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, task)
 }
 
 type chmodFile struct {

@@ -99,6 +99,8 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 			files.POST("/delete", postServerDeleteFiles)
 			files.POST("/compress", postServerCompressFiles)
 			files.POST("/decompress", postServerDecompressFiles)
+			files.GET("/archive-tasks", getArchiveTasks)
+			files.GET("/archive-status/:identifier", getArchiveTaskStatus)
 			files.POST("/chmod", postServerChmodFile)
 
 			files.GET("/pull", middleware.RemoteDownloadEnabled(), getServerPullingFiles)
