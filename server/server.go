@@ -71,6 +71,7 @@ type Server struct {
 	// Tracks open websocket connections for the server.
 	wsBag       *WebsocketBag
 	wsBagLocker sync.Mutex
+	sftpBag     *system.ContextBag
 
 	sinks map[system.SinkName]*system.SinkPool
 
@@ -216,6 +217,16 @@ func (s *Server) Sync() error {
 	s.fs.SetDiskLimit(s.DiskSpace())
 
 	s.SyncWithEnvironment()
+
+	// If the server is suspended immediately disconnect all open websocket connections
+	// and any connected SFTP clients. We don't need to worry about revoking any JWTs
+	// here since they'll be blocked from re-connecting to the websocket anyways. This
+	// just forces the client to disconnect and attempt to reconnect (rather than waiting
+	// on them to send a message and hit that disconnect logic).
+	if s.IsSuspended() {
+		s.Websockets().CancelAll()
+		s.Sftp().CancelAll()
+	}
 
 	return nil
 }
