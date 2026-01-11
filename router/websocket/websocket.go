@@ -84,7 +84,7 @@ func NewTokenPayload(token []byte) (*tokens.WebsocketPayload, error) {
 // GetHandler returns a new websocket handler using the context provided.
 func GetHandler(s *server.Server, w http.ResponseWriter, r *http.Request, c *gin.Context) (*Handler, error) {
 	upgrader := websocket.Upgrader{
-		EnableCompression: true,
+		EnableCompression: false, // Yeah nahhh i'm to lazy for that
 		// Ensure that the websocket request is originating from the Panel itself,
 		// and not some other location.
 		CheckOrigin: func(r *http.Request) bool {
@@ -111,7 +111,7 @@ func GetHandler(s *server.Server, w http.ResponseWriter, r *http.Request, c *gin
 		return nil, err
 	}
 
-	conn.SetReadLimit(4096)
+	conn.SetReadLimit(16384) // Increased from 4096 for larger JWTs
 	_ = conn.SetCompressionLevel(5)
 
 	return &Handler{

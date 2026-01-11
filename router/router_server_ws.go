@@ -133,11 +133,9 @@ func getServerWebsocket(c *gin.Context) {
 
 		throttled = false
 
-		// If the message isn't a format we expect, or the length of the message is far larger
-		// than we'd ever expect, drop it. The websocket upgrader logic does enforce a maximum
-		// _compressed_ message size of 4Kb but that could decompress to a much larger amount
-		// of data.
-		if t != ws.TextMessage || len(p) > 32_768 {
+		// If the message length is far larger than we'd ever expect, drop it.
+		// Accept both TextMessage and BinaryMessage for compatibility.
+		if (t != ws.TextMessage && t != ws.BinaryMessage) || len(p) > 32_768 {
 			continue
 		}
 
