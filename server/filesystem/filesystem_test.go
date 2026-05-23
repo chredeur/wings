@@ -386,13 +386,15 @@ func TestFilesystem_Copy(t *testing.T) {
 			g.Assert(errors.Is(err, ufs.ErrBadPathResolution)).IsTrue("err is not ErrBadPathResolution")
 		})
 
-		g.It("should return an error if the source is a directory", func() {
+		g.It("should recursively copy a directory and create a copy with a suffix", func() {
 			err := os.Mkdir(filepath.Join(rfs.root, "server/dir"), 0o755)
 			g.Assert(err).IsNil()
 
 			err = fs.Copy("dir")
-			g.Assert(err).IsNotNil()
-			g.Assert(errors.Is(err, ufs.ErrNotExist)).IsTrue("err is not ErrNotExist")
+			g.Assert(err).IsNil()
+
+			_, err = os.Stat(filepath.Join(rfs.root, "server/dir copy"))
+			g.Assert(err).IsNil()
 		})
 
 		g.It("should return an error if there is not space to copy the file", func() {
