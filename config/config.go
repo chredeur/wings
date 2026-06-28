@@ -292,6 +292,10 @@ type Backups struct {
 
 	// RemoveBackupsOnServerDelete deletes backups associated with a server when the server is deleted
 	RemoveBackupsOnServerDelete bool `default:"true" yaml:"remove_backups_on_server_delete"`
+
+	// RestoreHostAllowlist allows backup restore downloads to connect to otherwise blocked
+	// private/internal destinations. Entries may be hostnames, IP addresses, or CIDR ranges.
+	RestoreHostAllowlist []string `yaml:"restore_host_allowlist"`
 }
 
 type Transfers struct {
