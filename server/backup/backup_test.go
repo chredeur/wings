@@ -15,10 +15,10 @@ import (
 func TestBackupGenerateRequiresUuidIdentifier(t *testing.T) {
 	tests := map[string]func(string) BackupInterface{
 		"local": func(identifier string) BackupInterface {
-			return NewLocal(nil, identifier, "")
+			return NewLocal(nil, identifier, "", "")
 		},
 		"s3": func(identifier string) BackupInterface {
-			return NewS3(nil, identifier, "")
+			return NewS3(nil, identifier, "", "")
 		},
 	}
 
@@ -43,7 +43,7 @@ func TestBackupPathUsesBackupDirectory(t *testing.T) {
 		"../target/archive",
 		"nested/archive",
 	} {
-		b := NewLocal(nil, identifier, "")
+		b := NewLocal(nil, identifier, "", "")
 		rel, err := filepath.Rel(backupDir, b.Path())
 		if err != nil {
 			t.Fatal(err)

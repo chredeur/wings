@@ -481,7 +481,7 @@ func (fs *Filesystem) copyDirectory(dirfd int, name string, info ufs.FileInfo) e
 
 		if d.IsDir() {
 			// Create subdirectory in the copy
-			if err := fs.unixFS.MkdirAll(filepath.Join(newName, destPath), fi.Mode().Perm()); err != nil {
+			if _, err := fs.unixFS.MkdirAll(filepath.Join(newName, destPath), fi.Mode().Perm()); err != nil {
 				return err
 			}
 			if !fs.isTest {
@@ -527,7 +527,7 @@ func (fs *Filesystem) copySingleFile(srcDirfd int, srcName, newName, destPath st
 	// Create parent directories if needed
 	destDir := filepath.Dir(destPath)
 	if destDir != "." {
-		if err := fs.unixFS.MkdirAll(filepath.Join(newName, destDir), 0o755); err != nil {
+		if err := fs.mkdirAll(filepath.Join(newName, destDir), 0o755); err != nil {
 			srcFile.Close()
 			return err
 		}
